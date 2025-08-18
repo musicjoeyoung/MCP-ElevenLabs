@@ -1,12 +1,14 @@
+import * as schema from "./db/schema";
+
 import { createFiberplane, createOpenAPISpec } from "@fiberplane/hono";
-import { drizzle } from "drizzle-orm/d1";
-import { eq, desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { Hono } from "hono";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPTransport } from "@hono/mcp";
+import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
-import * as schema from "./db/schema";
 
 type Bindings = {
   DB: D1Database;
@@ -18,8 +20,8 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 // Voice IDs for the two personas
-const MAYA_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Female co-host (Bella)
-const JORDAN_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Male co-host (Adam)
+const MAYA_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Female co-host (Maya)
+const JORDAN_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Male co-host (Jordan)
 
 function createMcpServer(env: Bindings) {
   const server = new McpServer({
@@ -151,10 +153,10 @@ function createMcpServer(env: Bindings) {
           createdAt: schema.episodes.createdAt,
           audioFileKey: schema.episodes.audioFileKey
         })
-        .from(schema.episodes)
-        .orderBy(desc(schema.episodes.createdAt))
-        .limit(limit)
-        .offset(offset);
+          .from(schema.episodes)
+          .orderBy(desc(schema.episodes.createdAt))
+          .limit(limit)
+          .offset(offset);
 
         const result = episodes.map(episode => ({
           episode_id: episode.id,
@@ -230,10 +232,10 @@ function createMcpServer(env: Bindings) {
 // Async function to generate podcast script and audio
 async function generatePodcastScript(env: Bindings, episodeId: string, content: string, contentType: string, focusAreas?: string[]): Promise<{ success: boolean; error?: string }> {
   const db = drizzle(env.DB);
-  
+
   try {
-    const focusText = focusAreas && focusAreas.length > 0 
-      ? `Focus particularly on these areas: ${focusAreas.join(", ")}.` 
+    const focusText = focusAreas && focusAreas.length > 0
+      ? `Focus particularly on these areas: ${focusAreas.join(", ")}.`
       : "";
 
     const prompt = `You are creating a script for a FULL 3-5 minute podcast conversation between two enthusiastic AI co-hosts who review and spotlight interesting projects, applications, and content:
@@ -292,7 +294,7 @@ Write a LONG, DETAILED script that will definitely fill 3-5 minutes when spoken 
 
     // Update episode with script
     await db.update(schema.episodes)
-      .set({ 
+      .set({
         script,
         updatedAt: new Date()
       })
@@ -300,18 +302,18 @@ Write a LONG, DETAILED script that will definitely fill 3-5 minutes when spoken 
 
     // Generate audio
     await generatePodcastAudio(env, episodeId, script);
-    
+
     return { success: true };
 
   } catch (error) {
     console.error("Error generating script:", error);
     await db.update(schema.episodes)
-      .set({ 
+      .set({
         status: "failed",
         updatedAt: new Date()
       })
       .where(eq(schema.episodes.id, episodeId));
-    
+
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
@@ -319,15 +321,15 @@ Write a LONG, DETAILED script that will definitely fill 3-5 minutes when spoken 
 // Generate audio from script
 async function generatePodcastAudio(env: Bindings, episodeId: string, script: string) {
   const db = drizzle(env.DB);
-  
+
   try {
     console.log("Starting audio generation for episode:", episodeId);
     const eleven = new ElevenLabsClient({ apiKey: env.ELEVENLABS_API_KEY });
-    
+
     // Parse script into segments
     const segments = parseScriptSegments(script);
     console.log("Parsed segments count:", segments.length);
-    
+
     if (segments.length === 0) {
       throw new Error("No segments found in script");
     }
@@ -338,9 +340,9 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
       console.log(`Generating audio for segment ${i + 1}/${segments.length}: ${segment.speaker}`);
-      
+
       const voiceId = segment.speaker === "Maya" ? MAYA_VOICE_ID : JORDAN_VOICE_ID;
-      
+
       try {
         // Use the convert method with correct parameter name
         const audioStream = await eleven.textToSpeech.convert(voiceId, {
@@ -351,7 +353,7 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
         // Convert stream to Uint8Array
         const chunks: Uint8Array[] = [];
         const reader = audioStream.getReader();
-        
+
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -361,7 +363,7 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
         } finally {
           reader.releaseLock();
         }
-        
+
         // Combine chunks
         const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
         const audioData = new Uint8Array(totalLength);
@@ -370,10 +372,10 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
           audioData.set(chunk, offset);
           offset += chunk.length;
         }
-        
+
         console.log(`Generated ${audioData.length} bytes for segment ${i + 1}`);
         audioChunks.push(audioData);
-        
+
       } catch (segmentError) {
         console.error(`Error generating audio for segment ${i + 1}:`, segmentError);
         throw segmentError;
@@ -383,11 +385,11 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
     // Combine all audio chunks (simplified)
     const totalSize = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
     console.log("Total audio size:", totalSize, "bytes");
-    
+
     if (totalSize === 0) {
       throw new Error("No audio data generated");
     }
-    
+
     const finalAudio = new Uint8Array(totalSize);
     let offset = 0;
     for (const chunk of audioChunks) {
@@ -398,7 +400,7 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
     // Store in R2
     const audioKey = `podcasts/${episodeId}.mp3`;
     console.log("Uploading to R2 with key:", audioKey, "size:", finalAudio.length);
-    
+
     try {
       await env.R2.put(audioKey, finalAudio, {
         httpMetadata: {
@@ -416,7 +418,7 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
 
     // Update episode as completed
     await db.update(schema.episodes)
-      .set({ 
+      .set({
         status: "completed",
         audioFileKey: audioKey,
         durationSeconds: estimatedDuration,
@@ -429,12 +431,12 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
   } catch (error) {
     console.error("Error generating audio:", error);
     await db.update(schema.episodes)
-      .set({ 
+      .set({
         status: "failed",
         updatedAt: new Date()
       })
       .where(eq(schema.episodes.id, episodeId));
-    
+
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
@@ -443,7 +445,7 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
 function parseScriptSegments(script: string): Array<{ speaker: string; text: string }> {
   const lines = script.split("\n").filter(line => line.trim());
   const segments: Array<{ speaker: string; text: string }> = [];
-  
+
   for (const line of lines) {
     const match = line.match(/^(Maya|Jordan):\s*(.+)$/);
     if (match) {
@@ -453,7 +455,7 @@ function parseScriptSegments(script: string): Array<{ speaker: string; text: str
       });
     }
   }
-  
+
   return segments;
 }
 
@@ -461,7 +463,7 @@ function parseScriptSegments(script: string): Array<{ speaker: string; text: str
 app.all("/mcp", async (c) => {
   const mcpServer = createMcpServer(c.env);
   const transport = new StreamableHTTPTransport();
-  
+
   await mcpServer.connect(transport);
   return transport.handleRequest(c);
 });
@@ -470,26 +472,26 @@ app.all("/mcp", async (c) => {
 app.get("/audio/:episode_id", async (c) => {
   const episodeId = c.req.param("episode_id");
   const db = drizzle(c.env.DB);
-  
+
   try {
     const [episode] = await db.select()
       .from(schema.episodes)
       .where(eq(schema.episodes.id, episodeId));
-    
+
     if (!episode || !episode.audioFileKey) {
       return c.json({ error: "Audio not found" }, 404);
     }
-    
+
     const audioObject = await c.env.R2.get(episode.audioFileKey);
-    
+
     if (!audioObject) {
       return c.json({ error: "Audio file not found in storage" }, 404);
     }
-    
+
     const headers = new Headers();
     audioObject.writeHttpMetadata(headers);
     headers.set("etag", audioObject.httpEtag);
-    
+
     return new Response(audioObject.body, { headers });
   } catch (error) {
     return c.json({ error: "Error retrieving audio" }, 500);
@@ -500,7 +502,7 @@ app.get("/audio/:episode_id", async (c) => {
 app.get("/episodes/:episode_id/metadata", async (c) => {
   const episodeId = c.req.param("episode_id");
   const db = drizzle(c.env.DB);
-  
+
   try {
     const [episode] = await db.select({
       id: schema.episodes.id,
@@ -511,13 +513,13 @@ app.get("/episodes/:episode_id/metadata", async (c) => {
       createdAt: schema.episodes.createdAt,
       updatedAt: schema.episodes.updatedAt
     })
-    .from(schema.episodes)
-    .where(eq(schema.episodes.id, episodeId));
-    
+      .from(schema.episodes)
+      .where(eq(schema.episodes.id, episodeId));
+
     if (!episode) {
       return c.json({ error: "Episode not found" }, 404);
     }
-    
+
     return c.json({
       episode_id: episode.id,
       title: episode.title,
