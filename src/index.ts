@@ -20,8 +20,8 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 // Voice IDs for the two personas
-const MAYA_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Female co-host (Bella)
-const JORDAN_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Male co-host (Adam)
+const MAYA_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Female co-host (Maya)
+const JORDAN_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Male co-host (Jordan)
 
 function createMcpServer(env: Bindings) {
   const server = new McpServer({
@@ -246,7 +246,7 @@ async function generatePodcastScript(env: Bindings, episodeId: string, content: 
 FORMAT: This is NOT a podcast - it's a quick, captivating 60-second audio summary that achieves what an elevator pitch or author's summary would accomplish. ${focusText}
 
 STRUCTURE:
-1. Quick intro (5-10 seconds): "Welcome to What Is It? I'm Maya, I'm Jordan, we're not real but this ${contentType} is! We'll summarize it in 60 seconds."
+1. Quick intro (5-10 seconds): "Welcome to What Is It? I'm Maya (${MAYA_VOICE_ID}), and I'm Jordan (${JORDAN_VOICE_ID}), we're not real but this ${contentType} is! We'll summarize it in 60 seconds."
 2. Main summary (45-50 seconds): Fast-paced, engaging explanation of what it is, key features, and why it matters
 3. Quick wrap-up (5 seconds): "That's What Is It? - your 60-second summary!"
 
@@ -256,7 +256,7 @@ ${content}
 REQUIREMENTS:
 - Target exactly 150-200 words total (for 60 seconds of speech)
 - Be concise, energetic, and informative
-- Focus on WHAT it is, KEY features, and WHY it matters
+- Focus on WHAT it is (code, file, discussion, project, essay, etc.), KEY features, and WHY it matters
 - Quick mention they're AI but the project is real
 - No long introductions or detailed technical discussions
 - Make it sound like an elevator pitch in audio form
