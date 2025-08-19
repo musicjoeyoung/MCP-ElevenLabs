@@ -1,38 +1,24 @@
 {
-  "name": "mega-honc",
+  "name": "ai-podcast-generator-ki6evy",  
   "compatibility_date": "2025-02-04",
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_id": "local-honc-d1-database",
-      "database_name": "honc-d1-database",
+      "database_id": "fed7dde7-eaf3-4127-800e-dad3393abf79",  // <- Replace this
+      "database_name": "ai-podcast-generator-db",
       "migrations_dir": "drizzle/migrations"
     }
   ],
-
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
-  // "r2_buckets": [
-  //   {
-  //     "binding": "MY_BUCKET",
-  //     "bucket_name": "my-bucket"
-  //   }
-  // ],
-  // "ai": {
-  //   "binding": "AI"
-  // },
-
-  // Workers Logs
-  // Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
-  // Configuration: https://developers.cloudflare.com/workers/observability/logs/workers-logs/#enable-workers-logs
+  "r2_buckets": [
+    {
+      "binding": "ai_podcast_generator_audio",
+      "bucket_name": "ai-podcast-generator-audio"  // <- Add this for audio storage
+    }
+  ],
+  "ai": {
+    "binding": "AI"  // <- Add this for Cloudflare Workers AI
+  },
   "observability": {
     "enabled": true
   }
