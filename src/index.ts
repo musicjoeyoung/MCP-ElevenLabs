@@ -45,10 +45,14 @@ function createMcpServer(env: Bindings) {
       try {
         // Create episode record
         const [episode] = await db.insert(schema.episodes).values({
+          id: crypto.randomUUID(), // Generate a unique ID
           title: title || `AI Podcast: ${content_type} Analysis`,
           description: `Generated podcast discussing ${content_type} content`,
-          script: "", // Will be updated after generation
-          status: "generating"
+          status: "generating",
+          script: "", // Will be populated later
+          sourceContent: content,
+          createdAt: new Date(),
+          updatedAt: new Date()
         }).returning();
 
         // Create generation request record
@@ -112,7 +116,7 @@ function createMcpServer(env: Bindings) {
           title: episode.title,
           status: episode.status,
           duration_seconds: episode.durationSeconds,
-          audio_url: episode.audioFileKey ? `/audio/${episode.id}` : null,
+          audio_url: episode.audioUrl ? `/audio/${episode.id}` : null,
           created_at: episode.createdAt,
           updated_at: episode.updatedAt
         };
@@ -144,30 +148,29 @@ function createMcpServer(env: Bindings) {
     },
     async ({ limit, offset }) => {
       try {
-        const episodes = await db.select({
+        const episodesData = await db.select({
           id: schema.episodes.id,
           title: schema.episodes.title,
           description: schema.episodes.description,
           status: schema.episodes.status,
           durationSeconds: schema.episodes.durationSeconds,
-          createdAt: schema.episodes.createdAt,
-          audioFileKey: schema.episodes.audioFileKey
+          createdAt: schema.episodes.createdAt
         })
           .from(schema.episodes)
           .orderBy(desc(schema.episodes.createdAt))
           .limit(limit)
           .offset(offset);
 
-        const result = episodes.map(episode => ({
+
+        const result = episodesData.map(episode => ({
           episode_id: episode.id,
           title: episode.title,
           description: episode.description,
           status: episode.status,
           duration_seconds: episode.durationSeconds,
-          audio_url: episode.audioFileKey ? `/audio/${episode.id}` : null,
+          audio_url: `/audio/${episode.id}`,
           created_at: episode.createdAt
         }));
-
         return {
           content: [{
             type: "text",
@@ -418,7 +421,7 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
     await db.update(schema.episodes)
       .set({
         status: "completed",
-        audioFileKey: audioKey,
+        audioUrl: audioKey,
         durationSeconds: estimatedDuration,
         updatedAt: new Date()
       })
@@ -466,7 +469,8 @@ app.all("/mcp", async (c) => {
   const transport = new StreamableHTTPTransport();
 
   await mcpServer.connect(transport);
-  return transport.handleRequest(c);
+  // Use transport.handleRequest with type assertion to resolve type conflict
+  return transport.handleRequest(c as any);
 });
 
 // Audio streaming endpoint
@@ -479,11 +483,11 @@ app.get("/audio/:episode_id", async (c) => {
       .from(schema.episodes)
       .where(eq(schema.episodes.id, episodeId));
 
-    if (!episode || !episode.audioFileKey) {
+    if (!episode || !episode.audioUrl) {
       return c.json({ error: "Audio not found" }, 404);
     }
 
-    const audioObject = await c.env.R2.get(episode.audioFileKey);
+    const audioObject = await c.env.R2.get(episode.audioUrl);
 
     if (!audioObject) {
       return c.json({ error: "Audio file not found in storage" }, 404);
@@ -549,9 +553,11 @@ app.get("/openapi.json", c => {
   }));
 });
 
-app.use("/fp/*", createFiberplane({
-  app,
-  openapi: { url: "/openapi.json" }
-}));
+// Fiberplane OpenAPI middleware is disabled due to type conflicts between hono and @fiberplane/hono
+// If you need OpenAPI/Fiberplane, ensure both packages use the same underlying hono version.
+// app.use("/fp/*", createFiberplane({
+//   app: app as any,
+//   openapi: { url: "/openapi.json" }
+// }));
 
 export default app;

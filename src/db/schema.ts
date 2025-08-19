@@ -48,3 +48,12 @@ export const episodeHostsRelations = relations(episodeHosts, ({ one }) => ({
     references: [hosts.id],
   }),
 }));
+
+export const generationRequests = sqliteTable("generation_requests", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  episodeId: text("episode_id").notNull().references(() => episodes.id, { onDelete: "cascade" }),
+  sourceType: text("source_type").notNull(),
+  sourceContent: text("source_content").notNull(),
+  sourceMetadata: text("source_metadata", { mode: "json" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(CURRENT_TIMESTAMP)`),
+});
