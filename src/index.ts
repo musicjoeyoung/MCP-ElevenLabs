@@ -20,8 +20,8 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 // Voice IDs for the two personas
-const MAYA_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Female co-host (Maya)
-const JORDAN_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Male co-host (Jordan)
+const MAYA_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Female co-host (Bella)
+const JORDAN_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Male co-host (Adam)
 
 function createMcpServer(env: Bindings) {
   const server = new McpServer({
@@ -45,14 +45,10 @@ function createMcpServer(env: Bindings) {
       try {
         // Create episode record
         const [episode] = await db.insert(schema.episodes).values({
-          id: crypto.randomUUID(), // Generate a unique ID
           title: title || `AI Podcast: ${content_type} Analysis`,
           description: `Generated podcast discussing ${content_type} content`,
-          status: "generating",
-          script: "", // Will be populated later
-          sourceContent: content,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          script: "", // Will be updated after generation
+          status: "generating"
         }).returning();
 
         // Create generation request record
@@ -116,7 +112,7 @@ function createMcpServer(env: Bindings) {
           title: episode.title,
           status: episode.status,
           duration_seconds: episode.durationSeconds,
-          audio_url: episode.audioUrl ? `/audio/${episode.id}` : null,
+          audio_url: episode.audioFileKey ? `/audio/${episode.id}` : null,
           created_at: episode.createdAt,
           updated_at: episode.updatedAt
         };
@@ -148,29 +144,30 @@ function createMcpServer(env: Bindings) {
     },
     async ({ limit, offset }) => {
       try {
-        const episodesData = await db.select({
+        const episodes = await db.select({
           id: schema.episodes.id,
           title: schema.episodes.title,
           description: schema.episodes.description,
           status: schema.episodes.status,
           durationSeconds: schema.episodes.durationSeconds,
-          createdAt: schema.episodes.createdAt
+          createdAt: schema.episodes.createdAt,
+          audioFileKey: schema.episodes.audioFileKey
         })
           .from(schema.episodes)
           .orderBy(desc(schema.episodes.createdAt))
           .limit(limit)
           .offset(offset);
 
-
-        const result = episodesData.map(episode => ({
+        const result = episodes.map(episode => ({
           episode_id: episode.id,
           title: episode.title,
           description: episode.description,
           status: episode.status,
           duration_seconds: episode.durationSeconds,
-          audio_url: `/audio/${episode.id}`,
+          audio_url: episode.audioFileKey ? `/audio/${episode.id}` : null,
           created_at: episode.createdAt
         }));
+
         return {
           content: [{
             type: "text",
@@ -241,54 +238,59 @@ async function generatePodcastScript(env: Bindings, episodeId: string, content: 
       ? `Focus particularly on these areas: ${focusAreas.join(", ")}.`
       : "";
 
-    const prompt = `You are creating a script for a 60-second audio summary called "What Is It?" featuring two AI hosts:
+    const prompt = `You are creating a script for a FULL 3-5 minute podcast conversation between two enthusiastic AI co-hosts who review and spotlight interesting projects, applications, and content:
 
-- Maya: An energetic female AI host
-- Jordan: An enthusiastic male AI host
+- Maya: An energetic female AI co-host who loves discovering innovative projects and asking engaging questions
+- Jordan: An enthusiastic male AI co-host who provides insightful analysis and gets excited about technical details
 
-FORMAT: This is NOT a podcast - it's a quick, captivating 60-second audio summary that achieves what an elevator pitch or author's summary would accomplish. ${focusText}
+IMPORTANT: Maya and Jordan should acknowledge that they are AI-generated voices and be cheeky/funny about it. They can make light-hearted jokes about being artificial, mention they're "totally fake" hosts, or reference their AI nature in a humorous way.
 
-STRUCTURE:
-1. Quick intro (5-10 seconds): "Welcome to What Is It? I'm Maya (${MAYA_VOICE_ID}), and I'm Jordan (${JORDAN_VOICE_ID}), we're not real but this ${contentType} is! We'll summarize it in 60 seconds."
-2. Main summary (45-50 seconds): Fast-paced, engaging explanation of what it is, key features, and why it matters
-3. Quick wrap-up (5 seconds): "That's What Is It? - your 60-second summary!"
+You are NOT the authors/creators of this content. You are external AI reviewers who have discovered this ${contentType} and want to spotlight it for your audience. Be genuinely excited and curious about what you're reviewing. ${focusText}
 
-Content to summarize:
+Content to review and spotlight:
 ${content}
 
-REQUIREMENTS:
-- Target exactly 150-200 words total (for 60 seconds of speech)
-- Be concise, energetic, and informative
-- Focus on WHAT it is (code, file, discussion, project, essay, etc.), KEY features, and WHY it matters
-- Quick mention they're AI but the project is real
-- No long introductions or detailed technical discussions
-- Make it sound like an elevator pitch in audio form
+Create a VERY DETAILED and COMPLETE script with:
+1. Energetic introduction of the show (mention it's "a totally fake podcast" or similar cheeky reference)
+2. Self-aware AI humor about being artificial hosts
+3. Detailed overview of what this project/content is about
+4. In-depth discussion of key features, benefits, or interesting aspects
+5. Technical details and how it works
+6. What makes this special or noteworthy
+7. Who would benefit from this or find it interesting
+8. Use cases and examples
+9. Comparison to similar tools or approaches
+10. Future potential and implications
+11. Personal thoughts and reactions from both hosts
+12. Clear, complete conclusion with final thoughts and proper sign-off
+
+CRITICAL REQUIREMENTS:
+- Target 1800-2500 words for a FULL 3-5 minutes of audio
+- Write extensive dialogue with lots of back-and-forth conversation
+- Include detailed explanations and examples
+- Add natural pauses, reactions, and conversational elements
+- DO NOT cut off mid-sentence - include a complete ending
+- Make sure both hosts have substantial speaking time
 
 Format as:
-Maya: [brief dialogue]
-Jordan: [brief dialogue]
-Maya: [brief dialogue]
+Maya: [extensive dialogue]
+Jordan: [extensive dialogue]
+Maya: [extensive dialogue]
 etc.
 
-Create a tight, engaging 60-second summary!`;
+Write a LONG, DETAILED script that will definitely fill 3-5 minutes when spoken aloud!`;
 
     // Generate script using Cloudflare Workers AI directly
-    const aiResponse = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+    const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
       messages: [
-        { role: "system", content: "You are an expert at creating concise, engaging 60-second audio summaries. Always write COMPLETE scripts that don't cut off mid-sentence." },
+        { role: "system", content: "You are an expert podcast script writer who creates engaging technical conversations." },
         { role: "user", content: prompt }
-      ],
-      max_tokens: 500 // Reduced for 60-second format
+      ]
     }) as any;
 
     const script = aiResponse.response || "Error generating script";
     console.log("Generated script length:", script.length);
     console.log("Generated script preview:", script.substring(0, 500) + "...");
-    console.log("Generated script end:", "..." + script.substring(Math.max(0, script.length - 200)));
-
-    if (script.length < 1000) {
-      console.warn("Script is shorter than expected:", script.length, "characters");
-    }
 
     // Update episode with script
     await db.update(schema.episodes)
@@ -332,23 +334,23 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
       throw new Error("No segments found in script");
     }
 
-    // For 60-second summaries, we'll generate each segment separately and combine
-    const audioBuffers: ArrayBuffer[] = [];
+    const audioChunks: Uint8Array[] = [];
 
+    // Generate audio for each segment with simpler approach
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
-      console.log(`Generating audio for segment ${i + 1}/${segments.length}: ${segment.speaker} - "${segment.text.substring(0, 50)}..."`);
+      console.log(`Generating audio for segment ${i + 1}/${segments.length}: ${segment.speaker}`);
 
       const voiceId = segment.speaker === "Maya" ? MAYA_VOICE_ID : JORDAN_VOICE_ID;
 
       try {
-        // Use the correct ElevenLabs API method
+        // Use the convert method with correct parameter name
         const audioStream = await eleven.textToSpeech.convert(voiceId, {
           text: segment.text,
           modelId: "eleven_multilingual_v2"
         });
 
-        // Convert stream to buffer
+        // Convert stream to Uint8Array
         const chunks: Uint8Array[] = [];
         const reader = audioStream.getReader();
 
@@ -362,18 +364,17 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
           reader.releaseLock();
         }
 
-        // Combine chunks into single buffer
+        // Combine chunks
         const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-        const audioBuffer = new ArrayBuffer(totalLength);
-        const audioArray = new Uint8Array(audioBuffer);
+        const audioData = new Uint8Array(totalLength);
         let offset = 0;
         for (const chunk of chunks) {
-          audioArray.set(chunk, offset);
+          audioData.set(chunk, offset);
           offset += chunk.length;
         }
 
-        console.log(`Generated ${audioBuffer.byteLength} bytes for segment ${i + 1}`);
-        audioBuffers.push(audioBuffer);
+        console.log(`Generated ${audioData.length} bytes for segment ${i + 1}`);
+        audioChunks.push(audioData);
 
       } catch (segmentError) {
         console.error(`Error generating audio for segment ${i + 1}:`, segmentError);
@@ -381,21 +382,19 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
       }
     }
 
-    // Combine all audio buffers
-    const totalSize = audioBuffers.reduce((acc, buffer) => acc + buffer.byteLength, 0);
+    // Combine all audio chunks (simplified)
+    const totalSize = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
     console.log("Total audio size:", totalSize, "bytes");
 
     if (totalSize === 0) {
       throw new Error("No audio data generated");
     }
 
-    // Create final combined audio
     const finalAudio = new Uint8Array(totalSize);
     let offset = 0;
-    for (const buffer of audioBuffers) {
-      const chunk = new Uint8Array(buffer);
+    for (const chunk of audioChunks) {
       finalAudio.set(chunk, offset);
-      offset += chunk.byteLength;
+      offset += chunk.length;
     }
 
     // Store in R2
@@ -421,7 +420,7 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
     await db.update(schema.episodes)
       .set({
         status: "completed",
-        audioUrl: audioKey,
+        audioFileKey: audioKey,
         durationSeconds: estimatedDuration,
         updatedAt: new Date()
       })
@@ -442,7 +441,7 @@ async function generatePodcastAudio(env: Bindings, episodeId: string, script: st
   }
 }
 
-// Parse script into speaker segments (simplified for 60-second format)
+// Parse script into speaker segments
 function parseScriptSegments(script: string): Array<{ speaker: string; text: string }> {
   const lines = script.split("\n").filter(line => line.trim());
   const segments: Array<{ speaker: string; text: string }> = [];
@@ -450,13 +449,10 @@ function parseScriptSegments(script: string): Array<{ speaker: string; text: str
   for (const line of lines) {
     const match = line.match(/^(Maya|Jordan):\s*(.+)$/);
     if (match) {
-      const speaker = match[1];
-      const text = match[2].trim();
-
-      // For 60-second format, keep segments simple - no need to split
-      if (text.length > 0) {
-        segments.push({ speaker, text });
-      }
+      segments.push({
+        speaker: match[1],
+        text: match[2].trim()
+      });
     }
   }
 
@@ -469,8 +465,7 @@ app.all("/mcp", async (c) => {
   const transport = new StreamableHTTPTransport();
 
   await mcpServer.connect(transport);
-  // Use transport.handleRequest with type assertion to resolve type conflict
-  return transport.handleRequest(c as any);
+  return transport.handleRequest(c);
 });
 
 // Audio streaming endpoint
@@ -483,11 +478,11 @@ app.get("/audio/:episode_id", async (c) => {
       .from(schema.episodes)
       .where(eq(schema.episodes.id, episodeId));
 
-    if (!episode || !episode.audioUrl) {
+    if (!episode || !episode.audioFileKey) {
       return c.json({ error: "Audio not found" }, 404);
     }
 
-    const audioObject = await c.env.R2.get(episode.audioUrl);
+    const audioObject = await c.env.R2.get(episode.audioFileKey);
 
     if (!audioObject) {
       return c.json({ error: "Audio file not found in storage" }, 404);
@@ -553,11 +548,9 @@ app.get("/openapi.json", c => {
   }));
 });
 
-// Fiberplane OpenAPI middleware is disabled due to type conflicts between hono and @fiberplane/hono
-// If you need OpenAPI/Fiberplane, ensure both packages use the same underlying hono version.
-// app.use("/fp/*", createFiberplane({
-//   app: app as any,
-//   openapi: { url: "/openapi.json" }
-// }));
+app.use("/fp/*", createFiberplane({
+  app,
+  openapi: { url: "/openapi.json" }
+}));
 
 export default app;
