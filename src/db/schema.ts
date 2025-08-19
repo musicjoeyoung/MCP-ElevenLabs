@@ -1,6 +1,7 @@
-import { sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
 import { relations } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export const episodes = sqliteTable("episodes", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
