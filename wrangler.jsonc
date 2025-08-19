@@ -5,7 +5,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_id": "fed7dde7-eaf3-4127-800e-dad3393abf79",  // <- Replace this
+      "database_id": "fed7dde7-eaf3-4127-800e-dad3393abf79", 
       "database_name": "ai-podcast-generator-db",
       "migrations_dir": "drizzle/migrations"
     }
@@ -13,11 +13,11 @@
   "r2_buckets": [
     {
       "binding": "ai_podcast_generator_audio",
-      "bucket_name": "ai-podcast-generator-audio"  // <- Add this for audio storage
+      "bucket_name": "ai-podcast-generator-audio" 
     }
   ],
   "ai": {
-    "binding": "AI"  // <- Add this for Cloudflare Workers AI
+    "binding": "AI" 
   },
   "observability": {
     "enabled": true
